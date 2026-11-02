@@ -1,0 +1,67 @@
+seed: 20261102
+instrument: XAUUSD
+input_glob: "**/xauusd-m5-bid-*.csv"
+cache_dir: research/cache
+results_dir: research/results
+reports_dir: research/reports
+charts_dir: research/charts
+timezone:
+  source: UTC
+  new_york: America/New_York
+  ist: Asia/Kolkata
+  daily_open_new_york: "17:00"
+splits:
+  train_start: "2015-01-01"
+  train_end: "2021-12-31 23:59:59"
+  validation_start: "2022-01-01"
+  validation_end: "2024-04-30 23:59:59"
+  lockout_start: "2024-05-01"
+  lockout_end: "2026-10-01 00:00:00"
+costs:
+  spread_fallback: 0.30
+  spread_cases: [0.20, 0.30, 0.50]
+  spread_multipliers: [1.0, 1.5, 2.0]
+  commission_round_turn_per_lot: 0.0
+  commission_stress_round_turn_per_lot: 7.0
+  slippage_spread_fraction: 0.5
+execution:
+  risk_fraction: 0.01
+  starting_equity_usd: 10000.0
+  usd_inr: 84.0
+  contract_size_oz: 100.0
+  min_lot: 0.01
+  lot_step: 0.01
+  max_risk_fraction_after_rounding: 0.012
+  one_open_trade: true
+  pending_bars: 48
+  weekend_flatten_minutes_before_close: 10
+  no_trade_after_gap_dollars: 5.0
+baseline:
+  bias_timeframe: H4
+  swing_n: 2
+  bias_confirmation: close
+  level_candle: K1
+  level_type: candle_open
+  sweep_timeframe: H1
+  sweep_min_penetration_atr: 0.0
+  sweep_invalidation: h1_close
+  poi_type: most_recent_bearish_fvg_or_ob
+  poi_timeframe: M30
+  poi_entry: midpoint
+  limit_penetration_ticks: false
+  stop_type: S1
+  stop_buffer: 0.30
+  target_type: fixed_rr
+  rr: 3.0
+  time_filter: none
+  counter_trend: false
+  allow_buys: true
+  allow_sells: true
+search:
+  min_train_trades: 150
+  min_validation_trades: 60
+  max_interaction_trials: 20000
+  monte_carlo_runs: 1000
+  permutation_runs: 1000
+  walkforward_train_years: 4
+  walkforward_test_years: 1

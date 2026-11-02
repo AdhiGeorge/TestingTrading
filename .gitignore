@@ -1,0 +1,4 @@
+research/cache/*
+research/charts/*
+__pycache__/
+*.pyc
