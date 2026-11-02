@@ -18,12 +18,25 @@ splits:
   lockout_start: "2024-05-01"
   lockout_end: "2026-10-01 00:00:00"
 costs:
-  spread_fallback: 0.30
-  spread_cases: [0.20, 0.30, 0.50]
-  spread_multipliers: [1.0, 1.5, 2.0]
+  mode: price_scaled
+  spread_price_fraction: 0.000075
+  spread_multipliers: [0.5, 1.0, 1.5, 2.0]
+  dollar_sensitivity_spread: [0.20, 0.30, 0.50]
   commission_round_turn_per_lot: 0.0
   commission_stress_round_turn_per_lot: 7.0
   slippage_spread_fraction: 0.5
+scaling:
+  mode: atr_price_scaled
+  atr_period: 14
+  buffer_atr_fraction: 0.15
+  minimum_stop_atr_fraction: 0.50
+  stop_cap_atr_multiple: 5.0
+  gap_filter_atr_multiple: 1.0
+  dollar_sensitivity:
+    buffer: 0.30
+    minimum_stop: 1.50
+    stop_caps: [15.0, 25.0, 40.0]
+    gap_filter: 5.0
 execution:
   risk_fraction: 0.01
   starting_equity_usd: 10000.0
@@ -35,7 +48,6 @@ execution:
   one_open_trade: true
   pending_bars: 48
   weekend_flatten_minutes_before_close: 10
-  no_trade_after_gap_dollars: 5.0
 baseline:
   bias_timeframe: H4
   swing_n: 2
@@ -50,7 +62,6 @@ baseline:
   poi_entry: midpoint
   limit_penetration_ticks: false
   stop_type: S1
-  stop_buffer: 0.30
   target_type: fixed_rr
   rr: 3.0
   time_filter: none

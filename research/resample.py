@@ -37,7 +37,13 @@ def resample_aligned(m5: pd.DataFrame, timeframe: str) -> pd.DataFrame:
     bucket = (elapsed // mins) * mins
     x["_anchor"] = session_anchor
     x["_bucket"] = bucket
-    out = x.groupby(["_anchor", "_bucket"], sort=True, group_keys=False).apply(_bar_agg, include_groups=False).reset_index()
+    grouped = x.groupby(["_anchor", "_bucket"], sort=True, observed=True)
+    out = grouped.agg(
+        open=("open", "first"), high=("high", "max"), low=("low", "min"),
+        close=("close", "last"), volume=("close", "size"),
+        start_time=("timestamp", "first"), last_time=("timestamp", "last"),
+    ).reset_index()
+    out["close_time"] = out["last_time"] + pd.Timedelta(minutes=5)
     out["timestamp"] = out["start_time"]
     out["close_time"] = out["close_time"].dt.tz_convert("UTC")
     out["timestamp"] = out["timestamp"].dt.tz_convert("UTC")

@@ -51,6 +51,19 @@ def load_normalized(root: Path) -> pd.DataFrame:
 
 def quality_summary(df: pd.DataFrame) -> dict:
     gaps = df.loc[df["gap_minutes"] > 5, ["timestamp", "gap_minutes"]]
+    flat = (df.open == df.high) & (df.high == df.low) & (df.low == df.close)
+    ny_hour = df.ny_time.dt.hour
+    low_liquidity = ny_hour.isin([17, 18, 19, 20, 21, 22, 23, 0, 1, 2, 3, 4, 5])
+    flat_by_year = df.assign(_flat=flat, _low_liq=low_liquidity).groupby(df.timestamp.dt.year).agg(
+        bars=("timestamp", "size"), flat_bars=("_flat", "sum"), low_liq_flat=("_flat", lambda x: int((x & low_liquidity.loc[x.index]).sum()))
+    )
+    flat_report = {
+        str(y): {
+            "bars": int(r.bars), "flat_bars": int(r.flat_bars),
+            "share": float(r.flat_bars / r.bars),
+            "flat_share_in_ny_17_06": float(r.low_liq_flat / r.flat_bars) if r.flat_bars else 0.0,
+        } for y, r in flat_by_year.iterrows()
+    }
     ohlc_bad = {
         "high_lt_low": int((df.high < df.low).sum()),
         "open_outside_range": int(((df.open < df.low) | (df.open > df.high)).sum()),
@@ -68,6 +81,9 @@ def quality_summary(df: pd.DataFrame) -> dict:
         "bars_by_year": {str(k): int(v) for k, v in df.groupby(df.timestamp.dt.year).size().items()},
         "columns": list(df.columns),
         "has_spread": "spread" in df.columns,
+        "flat_bars_total": int(flat.sum()),
+        "flat_bars_share": float(flat.mean()),
+        "flat_bars_by_year": flat_report,
         "sha256_source_manifest": source_manifest_hash(df),
     }
 
