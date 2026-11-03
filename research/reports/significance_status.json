@@ -1,0 +1,6 @@
+{
+  "candidate_count": 0,
+  "permutation_test": "not run on lock-out because no candidate passed gates",
+  "multiple_testing_correction": "not applicable to a final candidate; 49 engine trials were logged and no candidate passed minimum count plus expectancy",
+  "lockout_touched": false
+}
