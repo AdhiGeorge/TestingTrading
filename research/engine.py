@@ -11,6 +11,9 @@ import pandas as pd
 from data_loader import load_normalized
 from resample import resample_all
 
+_PREP_CACHE = {}
+_POI_CACHE = {}
+_EVENT_CACHE = {}
 
 def _epoch_ns(series: pd.Series) -> np.ndarray:
     return pd.to_datetime(series, utc=True).dt.as_unit("ns").array.asi8
@@ -18,6 +21,9 @@ def _epoch_ns(series: pd.Series) -> np.ndarray:
 
 @dataclass
 class EngineParams:
+    swing_n: int = 2
+    allow_buys: bool = True
+    allow_sells: bool = True
     rr: float = 3.0
     pending_bars: int = 48
     spread_fraction: float = 0.000075
@@ -77,21 +83,22 @@ def _fvg_or_ob(m30: pd.DataFrame, start, side: str):
 
 
 def _precompute_pois(m30: pd.DataFrame, side: str):
-    out = []
-    for i in range(2, len(m30)):
-        a, b, c = m30.iloc[i-2], m30.iloc[i-1], m30.iloc[i]
-        if side == "sell":
-            if a.low > c.high:
-                out.append({"type":"bearish_fvg", "tf":"M30", "zone_low":c.high, "zone_high":a.low, "formed":c.close_time})
-            elif b.close > b.open and c.close < c.open and c.open < b.low:
-                lo, hi = min(b.open,b.close), max(b.open,b.close)
-                out.append({"type":"bearish_ob", "tf":"M30", "zone_low":lo, "zone_high":hi, "formed":c.close_time})
-        else:
-            if a.high < c.low:
-                out.append({"type":"bullish_fvg", "tf":"M30", "zone_low":a.high, "zone_high":c.low, "formed":c.close_time})
-            elif b.close < b.open and c.close > c.open and c.open > b.high:
-                lo, hi = min(b.open,b.close), max(b.open,b.close)
-                out.append({"type":"bullish_ob", "tf":"M30", "zone_low":lo, "zone_high":hi, "formed":c.close_time})
+    op, hi, lo, cl = (m30[c].to_numpy() for c in ["open","high","low","close"])
+    formed = m30.close_time.to_numpy()
+    out=[]
+    if side == "sell":
+        fvg = np.flatnonzero(lo[:-2] > hi[2:]) + 2
+        ob = np.flatnonzero((cl[1:-1] > op[1:-1]) & (cl[2:] < op[2:]) & (op[2:] < lo[1:-1])) + 2
+        for i in sorted(set(fvg.tolist()+ob.tolist())):
+            if i in set(fvg.tolist()): out.append({"type":"bearish_fvg","tf":"M30","zone_low":float(hi[i]),"zone_high":float(lo[i-2]),"formed":formed[i]})
+            else: out.append({"type":"bearish_ob","tf":"M30","zone_low":float(min(op[i-1],cl[i-1])),"zone_high":float(max(op[i-1],cl[i-1])),"formed":formed[i]})
+    else:
+        fvg = np.flatnonzero(hi[:-2] < lo[2:]) + 2
+        ob = np.flatnonzero((cl[1:-1] < op[1:-1]) & (cl[2:] > op[2:]) & (op[2:] > hi[1:-1])) + 2
+        fset=set(fvg.tolist())
+        for i in sorted(fset.union(ob.tolist())):
+            if i in fset: out.append({"type":"bullish_fvg","tf":"M30","zone_low":float(hi[i-2]),"zone_high":float(lo[i]),"formed":formed[i]})
+            else: out.append({"type":"bullish_ob","tf":"M30","zone_low":float(min(op[i-1],cl[i-1])),"zone_high":float(max(op[i-1],cl[i-1])),"formed":formed[i]})
     return out
 
 
@@ -140,7 +147,10 @@ def _side_trades(m5, m30, sweeps, side, p: EngineParams):
     m5_ist = m5.ist_time.to_numpy()
     m5_ny = m5.ny_time.to_numpy()
     m5_gap = m5.gap_minutes.to_numpy()
-    pois = _precompute_pois(m30, side)
+    poi_key = (id(m30), side)
+    if poi_key not in _POI_CACHE:
+        _POI_CACHE[poi_key] = _precompute_pois(m30, side)
+    pois = _POI_CACHE[poi_key]
     poi_times = np.array([pd.Timestamp(x["formed"]).value for x in pois], dtype="int64")
     for _, sw in sweeps.iterrows():
         pos = int(np.searchsorted(poi_times, pd.Timestamp(sw.sweep_time).value, side="right"))
@@ -190,7 +200,7 @@ def _side_trades(m5, m30, sweeps, side, p: EngineParams):
         r=((fill_price-exit_price)/risk) if side=="sell" else ((exit_price-fill_price)/risk)
         fill_ts = pd.Timestamp(m5_ts[fill_i], unit="ns", tz="UTC")
         exit_ts = pd.Timestamp(m5_ts[exit_idx], unit="ns", tz="UTC")
-        trades.append({"side":side,"level_time":lev_time(sw["level_time"]),"situation":"A","sweep_time":sw["sweep_time"],"sweep_high":sw["sweep_high"],"poi_type":poi["type"],"poi_timeframe":"M30","entry":entry,"stop":stop,"target":target,"fill_time":fill_ts,"exit_time":exit_ts,"exit_reason":reason,"r_result":r,"entry_ist":m5_ist[fill_i],"entry_new_york":m5_ny[fill_i],"year":fill_ts.year,"holding_minutes":(exit_ts-fill_ts).total_seconds()/60,"spread":spread})
+        trades.append({"side":side,"level_time":lev_time(sw["level_time"]),"situation":"A","sweep_time":sw["sweep_time"],"sweep_high":sw["sweep_high"],"poi_type":poi["type"],"poi_timeframe":"M30","order_time":pd.Timestamp(poi["formed"]),"entry":entry,"stop":stop,"target":target,"fill_time":fill_ts,"exit_time":exit_ts,"exit_reason":reason,"r_result":r,"entry_ist":m5_ist[fill_i],"entry_new_york":m5_ny[fill_i],"year":fill_ts.year,"holding_minutes":(exit_ts-fill_ts).total_seconds()/60,"spread":spread})
     return pd.DataFrame(trades)
 
 
@@ -199,23 +209,44 @@ def lev_time(x): return x
 
 def run_baseline(root: Path, p: EngineParams | None=None):
     p=p or EngineParams()
-    m5=load_normalized(root)
-    m5["atr"]=atr(m5)
-    bars=resample_all(m5); h1=bars["H1"].copy(); h4=bars["H4"].copy(); m30=bars["M30"].copy()
-    h1["atr"]=atr(h1); h4["atr"]=atr(h4)
-    hs,ls=confirmed_swings(h4,2)
+    cache_key = str(root.resolve())
+    if cache_key not in _PREP_CACHE:
+        m5=load_normalized(root)
+        m5["atr"]=atr(m5)
+        bars=resample_all(m5)
+        _PREP_CACHE[cache_key] = (m5, bars)
+    m5, bars = _PREP_CACHE[cache_key]
+    event_key=(cache_key,p.swing_n)
+    if event_key not in _EVENT_CACHE:
+        h1=bars["H1"].copy(); h4=bars["H4"].copy(); h1["atr"]=atr(h1); h4["atr"]=atr(h4)
+        hs,ls=confirmed_swings(h4,p.swing_n)
+        event_data={"h1":h1,"h4":h4,"sell":_sweeps(h1,_make_levels(h4,hs,"sell"),"sell"),"buy":_sweeps(h1,_make_levels(h4,ls,"buy"),"buy")}
+        _EVENT_CACHE[event_key]=event_data
+    event_data=_EVENT_CACHE[event_key]
+    h1,h4=event_data["h1"],event_data["h4"]
+    m30=bars["M30"]
     result=[]
-    for side, swings in (("sell",hs),("buy",ls)):
-        levels=_make_levels(h4, swings, side)
-        sweeps=_sweeps(h1, levels, side)
+    sides = []
+    if p.allow_sells: sides.append("sell")
+    if p.allow_buys: sides.append("buy")
+    for side in sides:
+        sweeps=event_data[side]
         if not sweeps.empty:
             result.append(_side_trades(m5, m30, sweeps, side, p))
     trades=pd.concat(result,ignore_index=True) if result else pd.DataFrame()
-    if not trades.empty: trades=trades.sort_values("fill_time").reset_index(drop=True)
+    if not trades.empty:
+        trades=trades.sort_values(["order_time","fill_time"]).reset_index(drop=True)
+        kept=[]; last_exit=None
+        for _, tr in trades.iterrows():
+            if last_exit is None or tr.order_time > last_exit:
+                kept.append(tr); last_exit=tr.exit_time
+        trades=pd.DataFrame(kept).sort_values("fill_time").reset_index(drop=True) if kept else pd.DataFrame()
     return trades
 
 
 def metrics(trades: pd.DataFrame) -> pd.DataFrame:
+    if trades.empty:
+        return pd.DataFrame(columns=["scope","year","trades","win_rate","avg_win_r","avg_loss_r","expectancy_r","profit_factor","total_r","avg_holding_min"])
     rows=[]
     for key, g in [("combined",trades)]+[(x,trades[trades.side==x]) for x in ["buy","sell"]]:
         if g.empty: continue

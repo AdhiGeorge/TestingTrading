@@ -1,0 +1,68 @@
+ablation baseline
+ablation swing_n3
+ablation swing_n5
+ablation rr1.5
+ablation rr2
+ablation rr4
+ablation buffer0.10atr
+ablation buffer0.25atr
+ablation min0.75atr
+ablation cap3atr
+ablation pending24
+ablation pending96
+ablation spread0.5x
+ablation spread1.5x
+ablation spread2x
+ablation dollar_secondary
+greedy greedy_rr2_buffer025
+greedy greedy_rr3_pending96
+greedy greedy_sell_favor
+interaction_001
+interaction_002
+interaction_003
+interaction_004
+interaction_005
+interaction_006
+interaction_007
+interaction_008
+interaction_009
+interaction_010
+interaction_011
+interaction_012
+interaction_013
+interaction_014
+interaction_015
+interaction_016
+interaction_017
+interaction_018
+interaction_019
+interaction_020
+interaction_021
+interaction_022
+interaction_023
+interaction_024
+interaction_025
+interaction_026
+interaction_027
+interaction_028
+interaction_029
+interaction_030
+{
+  "ablation_trials": 16,
+  "greedy_trials": 3,
+  "interaction_trials": 30,
+  "total_engine_trials": 49,
+  "eligible_candidates": 0,
+  "lockout_touched": false
+}
+top validation              variant  validation_trades  validation_expectancy
+greedy_rr2_buffer025                 24               1.125000
+     interaction_015                 24               1.125000
+     interaction_027                 33               1.121212
+     interaction_007                 13               1.076923
+     interaction_003                 22               1.045455
+     interaction_008                 10               1.000000
+     interaction_010                  8               1.000000
+     interaction_013                  9               0.777778
+     interaction_012                  9               0.777778
+       buffer0.25atr                 14               0.714286

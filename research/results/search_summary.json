@@ -1,0 +1,8 @@
+{
+  "ablation_trials": 16,
+  "greedy_trials": 3,
+  "interaction_trials": 30,
+  "total_engine_trials": 49,
+  "eligible_candidates": 0,
+  "lockout_touched": false
+}
